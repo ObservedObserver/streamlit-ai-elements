@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "streamlit-ai-elements"
+version = "0.0.1"
+description = "Build Streamlit apps with React-like elements in Python"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+keywords = ["streamlit", "react", "ui", "components"]
+authors = [
+    {name = "Your Name", email = "your.email@example.com"}
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Framework :: Streamlit",
+]
+dependencies = [
+    "streamlit>=1.22.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/yourusername/streamlit-ai-elements"
+Repository = "https://github.com/yourusername/streamlit-ai-elements"
+Issues = "https://github.com/yourusername/streamlit-ai-elements/issues"
+
+[tool.setuptools]
+packages = ["streamlit_ai_elements", "streamlit_ai_elements.base", "streamlit_ai_elements.utils"]
