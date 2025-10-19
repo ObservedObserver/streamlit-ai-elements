@@ -1,8 +1,13 @@
 import os
+from dotenv import load_dotenv
 import streamlit.components.v1 as components
 
+# Load environment variables from .env file
+load_dotenv()
+
 # Set to False during development (requires dev server running), True for release
-__RELEASE = False
+# Load from .env file, default to True if not found
+__RELEASE = os.getenv('RELEASE', 'true').lower() in ('true', '1', 'yes')
 
 def declare_component(component_name: str, url="http://localhost:5173", release=__RELEASE):
     """Declare a Streamlit component
