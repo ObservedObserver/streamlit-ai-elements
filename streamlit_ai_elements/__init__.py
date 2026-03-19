@@ -1,10 +1,11 @@
 """
 streamlit_ai_elements — AI-powered rendering components for Streamlit.
 
-Three rendering modes built on Streamlit Component V2:
+Rendering modes built on Streamlit Component V2:
   1. js_raw()    – render arbitrary HTML / CSS / JS
   2. vega_lite() – render a Vega-Lite specification
   3. sandbox()   – interactive dashboards with pre-injected libraries
+  4. excalidraw() – structured diagram editor powered by Excalidraw
 """
 
 import streamlit as st
@@ -12,7 +13,7 @@ import json as _json
 from pathlib import Path as _Path
 
 __version__ = "0.1.0"
-__all__ = ["js_raw", "vega_lite", "sandbox"]
+__all__ = ["js_raw", "vega_lite", "sandbox", "excalidraw"]
 
 # ---------------------------------------------------------------------------
 # Asset loading — prefer local bundles, fall back to CDN-based inline JS
@@ -38,6 +39,36 @@ def _ensure(name: str, **kwargs):
     if name not in _registry:
         _registry[name] = st.components.v2.component(name=name, **kwargs)
     return _registry[name]
+
+
+def _normalize_excalidraw_shapes(shapes: list[dict]) -> list[dict]:
+    normalized = []
+    for shape in shapes:
+        item = dict(shape)
+        if "vertical_align" in item and "verticalAlign" not in item:
+            item["verticalAlign"] = item.pop("vertical_align")
+        normalized.append(item)
+    return normalized
+
+
+def _normalize_excalidraw_connectors(connectors: list[dict]) -> list[dict]:
+    normalized = []
+    for connector in connectors:
+        item = dict(connector)
+        if "from_anchor" in item and "fromAnchor" not in item:
+            item["fromAnchor"] = item.pop("from_anchor")
+        if "to_anchor" in item and "toAnchor" not in item:
+            item["toAnchor"] = item.pop("to_anchor")
+        if "start_arrowhead" in item and "arrowheadStart" not in item:
+            item["arrowheadStart"] = item.pop("start_arrowhead")
+        if "startArrowhead" in item and "arrowheadStart" not in item:
+            item["arrowheadStart"] = item.pop("startArrowhead")
+        if "end_arrowhead" in item and "arrowheadEnd" not in item:
+            item["arrowheadEnd"] = item.pop("end_arrowhead")
+        if "endArrowhead" in item and "arrowheadEnd" not in item:
+            item["arrowheadEnd"] = item.pop("endArrowhead")
+        normalized.append(item)
+    return normalized
 
 
 # ===========================================================================
@@ -434,6 +465,73 @@ def sandbox(
             "js": js,
             "libraries": libraries or ["echarts"],
             "context": context or {},
+        },
+        height=height,
+        key=key,
+    )
+
+
+# ===========================================================================
+# Mode 4 — Preview Component: Excalidraw diagrams
+# ===========================================================================
+_TD_HTML = (
+    '<style>'
+    'html, body { margin:0; padding:0; width:100%; height:100%; overflow:hidden; }'
+    'body { position:relative; }'
+    '#_r { position:relative; width:100%; height:100%; overflow:hidden; }'
+    "</style>"
+    '<div id="_r"></div>'
+)
+
+_TD_CSS = _load_asset("excalidraw-editor.css") or ""
+
+_TD_FALLBACK_JS = r"""
+export default function (component) {
+  const { parentElement } = component;
+  const root = parentElement.querySelector('#_r');
+  if (!root) return;
+  root.innerHTML =
+    '<pre style="color:#ff6b6b;background:#2d1b1b;padding:12px;border-radius:6px;white-space:pre-wrap">'
+    + 'Missing Excalidraw renderer bundle. Run the frontend build to generate streamlit_ai_elements/assets/excalidraw-renderer.js.'
+    + '</pre>';
+}
+"""
+
+_TD_JS = _load_asset("excalidraw-renderer.js") or _TD_FALLBACK_JS
+
+
+def excalidraw(
+    shapes: list[dict],
+    connectors: list[dict] | None = None,
+    readonly: bool = False,
+    hide_ui: bool = False,
+    zoom_to_fit: bool = True,
+    camera: dict | None = None,
+    height: int | str = 560,
+    key: str | None = None,
+):
+    """
+    Render a structured diagram in an interactive Excalidraw editor.
+
+    ``shapes`` should contain JSON-friendly node specifications such as
+    rectangles, diamonds, ellipses, or text items. ``connectors`` link those
+    shapes together with arrows by referencing ``from`` / ``to`` shape ids.
+    """
+    renderer = _ensure(
+        "ai_excalidraw_editor",
+        html=_TD_HTML,
+        css=_TD_CSS,
+        js=_TD_JS,
+        isolate_styles=False,
+    )
+    return renderer(
+        data={
+            "shapes": _normalize_excalidraw_shapes(shapes),
+            "connectors": _normalize_excalidraw_connectors(connectors or []),
+            "readonly": readonly,
+            "hideUi": hide_ui,
+            "zoomToFit": zoom_to_fit,
+            "camera": camera or {},
         },
         height=height,
         key=key,

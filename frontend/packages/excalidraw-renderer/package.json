@@ -1,0 +1,12 @@
+{
+  "name": "@ai-elements/excalidraw-renderer",
+  "version": "0.1.0",
+  "private": true,
+  "main": "src/index.tsx",
+  "dependencies": {
+    "@ai-elements/shared": "*",
+    "@excalidraw/excalidraw": "^0.18.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
+  }
+}

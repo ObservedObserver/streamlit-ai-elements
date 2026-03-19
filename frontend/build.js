@@ -11,9 +11,69 @@ const shared = {
   minify: true,
   target: ["es2020"],
   sourcemap: false,
+  loader: {
+    ".css": "text",
+  },
 };
 
+function buildExcalidrawCss() {
+  const cssPath = path.resolve(
+    __dirname,
+    "node_modules/@excalidraw/excalidraw/dist/prod/index.css",
+  );
+
+  if (!fs.existsSync(cssPath)) {
+    return;
+  }
+
+  const raw = fs.readFileSync(cssPath, "utf-8");
+  const stripped = raw
+    .replace(/^@charset[^;]+;/, "")
+    .replace(/@font-face\{[^}]+\}/g, "");
+
+  const custom = `
+#_r.ai-elements-excalidraw-root {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 420px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at top left, rgba(76, 110, 245, 0.08), transparent 36%),
+    linear-gradient(180deg, #fcfcfd 0%, #f8fafc 100%);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 16px;
+}
+
+#_r.ai-elements-excalidraw-root .ai-elements-excalidraw-mount {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+#_r.ai-elements-excalidraw-root.ai-elements-excalidraw-hide-ui .App-menu,
+#_r.ai-elements-excalidraw-root.ai-elements-excalidraw-hide-ui .layer-ui__wrapper__footer,
+#_r.ai-elements-excalidraw-root.ai-elements-excalidraw-hide-ui .main-menu-trigger,
+#_r.ai-elements-excalidraw-root.ai-elements-excalidraw-hide-ui .help-icon,
+#_r.ai-elements-excalidraw-root.ai-elements-excalidraw-hide-ui .undo-redo-buttons,
+#_r.ai-elements-excalidraw-root.ai-elements-excalidraw-hide-ui .FixedSideContainer {
+  display: none !important;
+}
+`;
+
+  fs.writeFileSync(
+    path.join(outdir, "excalidraw-editor.css"),
+    `${stripped}\n${custom}\n`,
+    "utf-8",
+  );
+}
+
 function resolveEntryPoint(dir) {
+  const tsxEntry = path.join(packagesDir, dir, "src/index.tsx");
+  if (fs.existsSync(tsxEntry)) {
+    return tsxEntry;
+  }
+
   const tsEntry = path.join(packagesDir, dir, "src/index.ts");
   if (fs.existsSync(tsEntry)) {
     return tsEntry;
@@ -28,6 +88,8 @@ function resolveEntryPoint(dir) {
 }
 
 async function build() {
+  buildExcalidrawCss();
+
   const dirs = fs.readdirSync(packagesDir).filter((d) => {
     return fs.statSync(path.join(packagesDir, d)).isDirectory();
   });
@@ -43,7 +105,7 @@ async function build() {
 
     const entryPoint = resolveEntryPoint(dir);
     if (!entryPoint) {
-      console.warn(`  skip ${dir} (no src/index.ts or src/index.js)`);
+      console.warn(`  skip ${dir} (no src/index.tsx, src/index.ts, or src/index.js)`);
       continue;
     }
 
