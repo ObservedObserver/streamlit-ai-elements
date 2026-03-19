@@ -1,0 +1,10 @@
+{
+  "name": "@ai-elements/sandbox-renderer",
+  "version": "0.1.0",
+  "private": true,
+  "main": "src/index.js",
+  "dependencies": {
+    "echarts": "^5.6.0",
+    "@ai-elements/shared": "*"
+  }
+}

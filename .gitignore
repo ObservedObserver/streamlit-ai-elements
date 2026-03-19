@@ -179,3 +179,22 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+
+AGENTS.md
+CLAUDE.md
+
+# Node.js
+node_modules/
+.npm
+.yarn/
+.yarn-integrity
+.pnp.*
+.pnpm-debug.log*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+*.tsbuildinfo
+
+# Frontend build artifacts
+frontend/node_modules/
