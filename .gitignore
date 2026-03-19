@@ -198,6 +198,7 @@ lerna-debug.log*
 
 # Frontend build artifacts
 frontend/node_modules/
+streamlit_ai_elements/assets/*.js
 
 # Playwright / browser automation artifacts
 .playwright-cli/
