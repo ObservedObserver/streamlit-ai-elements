@@ -11,7 +11,12 @@ import type { RendererCleanup, RendererComponent } from "@ai-elements/shared";
 
 interface SandboxRendererData {
   js?: string;
+  data?: unknown;
+  resource?: unknown;
+  rows?: unknown[];
   context?: Record<string, unknown>;
+  resources?: Record<string, unknown>;
+  libraries?: string[];
 }
 
 const ERROR_STYLE =
@@ -30,8 +35,7 @@ export default function renderSandbox(
     return undefined;
   }
 
-  const context = data.context ?? {};
-  const dataHash = hash(data.js + JSON.stringify(context));
+  const dataHash = hash(JSON.stringify(data));
   if (root.dataset.h === dataHash) {
     return root._cleanup;
   }
@@ -44,13 +48,16 @@ export default function renderSandbox(
 
   const timers = safeTimers(root, gen);
   root.innerHTML = "";
-
   const sandboxContext = {
     container: root,
     echarts,
     setStateValue,
     setTriggerValue,
-    data: context,
+    data: data.data ?? {},
+    resources: data.resources ?? {},
+    resource: data.resource ?? null,
+    rows: data.rows ?? [],
+    context: data.context ?? {},
     requestAnimationFrame: timers.requestAnimationFrame,
     setInterval: timers.setInterval,
     setTimeout: timers.setTimeout,

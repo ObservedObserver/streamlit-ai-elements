@@ -4,6 +4,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import streamlit_ai_elements as ai
 from streamlit_ai_elements import _normalize_excalidraw_connectors, _normalize_excalidraw_shapes
 from streamlit_ai_elements.chat_support import TOOLS, build_api_messages, call_llm, render_element
 
@@ -37,10 +38,26 @@ class ChatSupportTests(unittest.TestCase):
         self.assertEqual(messages[0]["role"], "system")
         self.assertEqual(messages[1]["content"], "draw a flowchart")
 
+    def test_build_api_messages_includes_runtime_resources(self):
+        runtime_resources = ai.resources(
+            warehouse=ai.resource.sql_database(
+                object(),
+                description="Analytics warehouse",
+                schema={"orders": ["id", "amount"]},
+            )
+        )
+
+        messages = build_api_messages(
+            [{"role": "user", "content": "show revenue"}],
+            resources=runtime_resources,
+        )
+
+        self.assertIn("Available runtime resources:", messages[0]["content"])
+        self.assertIn("warehouse (sql_database)", messages[0]["content"])
+
     def test_call_llm_collects_excalidraw_tool_call(self):
         tool_args = {
-            "readonly": True,
-            "hide_ui": True,
+            "component": "excalidraw",
             "zoom_to_fit": True,
             "shapes": [
                 {"id": "start", "type": "rounded-rectangle", "x": 80, "y": 80, "width": 180, "height": 64, "text": "Start"},
@@ -52,7 +69,7 @@ class ChatSupportTests(unittest.TestCase):
         }
         tool_call = SimpleNamespace(
             id="tool_1",
-            function=SimpleNamespace(name="excalidraw", arguments=json.dumps(tool_args)),
+            function=SimpleNamespace(name="prebuilt_component", arguments=json.dumps(tool_args)),
         )
 
         client = FakeClient(
@@ -65,7 +82,8 @@ class ChatSupportTests(unittest.TestCase):
         result = call_llm(client, "gpt-5.4", build_api_messages([{"role": "user", "content": "Draw a simple flowchart"}]))
 
         self.assertEqual(len(result["elements"]), 1)
-        self.assertEqual(result["elements"][0]["type"], "excalidraw")
+        self.assertEqual(result["elements"][0]["type"], "prebuilt_component")
+        self.assertEqual(result["elements"][0]["component"], "excalidraw")
         self.assertEqual(result["elements"][0]["args"]["shapes"][0]["id"], "start")
         self.assertEqual(result["elements"][0]["args"]["connectors"][0]["from"], "start")
         self.assertIn("Created a simple flowchart.", result["content"])
@@ -73,10 +91,10 @@ class ChatSupportTests(unittest.TestCase):
 
     def test_render_element_dispatches_excalidraw_parameters(self):
         elem = {
-            "type": "excalidraw",
+            "type": "prebuilt_component",
+            "component": "excalidraw",
             "args": {
-                "readonly": True,
-                "hide_ui": True,
+                "component": "excalidraw",
                 "zoom_to_fit": True,
                 "shapes": [
                     {"id": "start", "type": "rounded-rectangle", "x": 80, "y": 80, "text": "Start"}
@@ -101,6 +119,30 @@ class ChatSupportTests(unittest.TestCase):
             key="case_1",
         )
 
+    def test_render_element_passes_runtime_resource_selection_to_sandbox(self):
+        elem = {
+            "type": "sandbox",
+            "args": {
+                "js": "container.innerHTML = '<div>ok</div>'",
+                "resources": ["dataset"],
+            },
+        }
+        runtime_resources = ai.resources(
+            warehouse=ai.resource.sql_database(object(), description="Warehouse")
+        )
+
+        with patch("streamlit_ai_elements.chat_support.ai.sandbox") as mock_sandbox:
+            render_element(elem, key="case_2", resources=runtime_resources)
+
+        mock_sandbox.assert_called_once_with(
+            js="container.innerHTML = '<div>ok</div>'",
+            libraries=None,
+            height=560,
+            resource_names=["dataset"],
+            resources=runtime_resources,
+            key="case_2",
+        )
+
     def test_excalidraw_normalizes_snake_case_fields(self):
         shapes = _normalize_excalidraw_shapes(
             [{"id": "node_1", "type": "diamond", "x": 120, "y": 80, "vertical_align": "start"}]
@@ -123,10 +165,9 @@ class ChatSupportTests(unittest.TestCase):
         self.assertEqual(connectors[0]["toAnchor"]["x"], 0)
         self.assertEqual(connectors[0]["arrowheadEnd"], "triangle")
 
-
 @unittest.skipUnless(os.environ.get("OPENAI_API_KEY"), "OPENAI_API_KEY is required for the live excalidraw tool-call check.")
 class ExcalidrawLiveIntegrationTests(unittest.TestCase):
-    def test_model_calls_excalidraw_for_a_simple_flowchart(self):
+    def test_model_calls_prebuilt_component_for_a_simple_flowchart(self):
         from openai import OpenAI
 
         client = OpenAI(
@@ -149,9 +190,10 @@ class ExcalidrawLiveIntegrationTests(unittest.TestCase):
 
         message = response.choices[0].message
         self.assertTrue(message.tool_calls, "Expected the model to emit a tool call.")
-        self.assertEqual(message.tool_calls[0].function.name, "excalidraw")
+        self.assertEqual(message.tool_calls[0].function.name, "prebuilt_component")
 
         args = json.loads(message.tool_calls[0].function.arguments)
+        self.assertEqual(args["component"], "excalidraw")
         self.assertGreaterEqual(len(args.get("shapes", [])), 3)
         self.assertGreaterEqual(len(args.get("connectors", [])), 2)
         self.assertNotIn("readonly", args)

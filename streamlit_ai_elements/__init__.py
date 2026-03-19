@@ -12,8 +12,26 @@ import streamlit as st
 import json as _json
 from pathlib import Path as _Path
 
+from .runtime_resources import (
+    RuntimeResource,
+    build_javascript_runtime as _build_javascript_runtime,
+    inject_vega_lite_resource_data as _inject_vega_lite_resource_data,
+    resolve_frontend_resources,
+    resource,
+    resources,
+)
+
 __version__ = "0.1.0"
-__all__ = ["js_raw", "vega_lite", "sandbox", "excalidraw"]
+__all__ = [
+    "RuntimeResource",
+    "resource",
+    "resources",
+    "resolve_frontend_resources",
+    "js_raw",
+    "vega_lite",
+    "sandbox",
+    "excalidraw",
+]
 
 # ---------------------------------------------------------------------------
 # Asset loading — prefer local bundles, fall back to CDN-based inline JS
@@ -160,10 +178,21 @@ export default function (component) {
     try {
       const fn = new Function(
         'container',
+        'resources', 'data', 'resource', 'rows', 'context',
         'requestAnimationFrame', 'setInterval', 'setTimeout',
         data.js,
       );
-      fn(root, timers.requestAnimationFrame, timers.setInterval, timers.setTimeout);
+      fn(
+        root,
+        data.resources || {},
+        data.data ?? {},
+        data.resource ?? null,
+        data.rows || [],
+        data.context || {},
+        timers.requestAnimationFrame,
+        timers.setInterval,
+        timers.setTimeout,
+      );
     } catch (e) {
       root.insertAdjacentHTML(
         'beforeend',
@@ -184,19 +213,29 @@ def js_raw(
     html: str = "",
     css: str = "",
     js: str = "",
-    height: int | str = 400,
+    height: int | str = "content",
+    resource_names: list[str] | None = None,
+    resources: dict[str, RuntimeResource] | None = None,
     key: str | None = None,
 ):
     """
     Render raw HTML / CSS / JS code.
 
-    The JavaScript code receives a ``container`` variable pointing to the root
-    DOM element.  ``requestAnimationFrame``, ``setInterval``, and ``setTimeout``
-    are wrapped so they auto-cancel when the component re-renders.
+    The JavaScript code receives:
+
+    - ``container`` — root DOM element
+    - ``resources`` — requested runtime resources materialized for frontend use
+    - ``data`` — if exactly one dataframe resource is requested, that dataframe payload; otherwise a context/resource object
+    - ``resource`` — the single requested resource payload when there is exactly one
+    - ``rows`` — convenience alias for ``data.rows`` when the primary resource is a dataframe
+    - ``context`` — explicit Python-side context payload
+    - ``requestAnimationFrame`` / ``setInterval`` / ``setTimeout`` — safe timers
     """
+    runtime_resources = resolve_frontend_resources(resources, resource_names)
+    runtime = _build_javascript_runtime(runtime_resources)
     renderer = _ensure("ai_js_raw", html='<div id="_r"></div>', js=_RAW_JS)
     return renderer(
-        data={"html": html, "css": css, "js": js},
+        data={"html": html, "css": css, "js": js, **runtime},
         height=height,
         key=key,
     )
@@ -318,6 +357,9 @@ def vega_lite(
     spec: dict | str,
     height: int | str = 400,
     options: dict | None = None,
+    resource_names: list[str] | None = None,
+    data_resource: str | None = None,
+    resources: dict[str, RuntimeResource] | None = None,
     key: str | None = None,
 ):
     """
@@ -325,6 +367,10 @@ def vega_lite(
     """
     if isinstance(spec, str):
         spec = _json.loads(spec)
+
+    selected_resource_names = [data_resource] if data_resource else resource_names
+    resolved_resources = resolve_frontend_resources(resources, selected_resource_names)
+    spec = _inject_vega_lite_resource_data(spec, resolved_resources, data_resource=data_resource)
 
     # Prefer Streamlit's built-in Vega-Lite renderer for standard specs.
     # It is more reliable inside dynamic containers such as chat messages.
@@ -380,7 +426,7 @@ export default function (component) {
   const root = parentElement.querySelector('#_r');
   if (!root) return;
 
-  const dh = _hash(data.js + (data.context ? JSON.stringify(data.context) : ''));
+  const dh = _hash(JSON.stringify(data));
   if (root.dataset.h === dh) return root._cleanup;
   root.dataset.h = dh;
 
@@ -407,7 +453,11 @@ export default function (component) {
         THREE:                 window.THREE,
         setStateValue:         setStateValue,
         setTriggerValue:       setTriggerValue,
-        data:                  data.context || {},
+        data:                  data.data || {},
+        resources:             data.resources || {},
+        resource:              data.resource || null,
+        rows:                  data.rows || [],
+        context:               data.context || {},
         requestAnimationFrame: timers.requestAnimationFrame,
         setInterval:           timers.setInterval,
         setTimeout:            timers.setTimeout,
@@ -434,9 +484,11 @@ _SB_JS = _load_asset("sandbox-renderer.js") or _SB_CDN_JS
 
 def sandbox(
     js: str,
-    height: int | str = 500,
+    height: int | str = "content",
     libraries: list[str] | None = None,
     context: dict | None = None,
+    resource_names: list[str] | None = None,
+    resources: dict[str, RuntimeResource] | None = None,
     key: str | None = None,
 ):
     """
@@ -450,11 +502,17 @@ def sandbox(
     - ``THREE``                 — Three.js         (if loaded)
     - ``setStateValue(n, v)``   — persist state back to Python
     - ``setTriggerValue(n, v)`` — fire transient events to Python
-    - ``data``                  — custom context dict from Python
+    - ``resources``             — requested runtime resources materialized for frontend use
+    - ``data``                  — if exactly one dataframe resource is requested, that dataframe payload; otherwise a context/resource object
+    - ``resource``              — the single requested resource payload when there is exactly one
+    - ``rows``                  — convenience alias for ``data.rows`` when the primary resource is a dataframe
+    - ``context``               — custom context dict from Python
     - ``requestAnimationFrame`` — auto-cancels on re-render
     - ``setInterval``           — auto-cancels on re-render
     - ``setTimeout``            — auto-cancels on re-render
     """
+    runtime_resources = resolve_frontend_resources(resources, resource_names)
+    runtime = _build_javascript_runtime(runtime_resources, context=context or {})
     renderer = _ensure(
         "ai_sandbox",
         html=_SB_HTML,
@@ -464,7 +522,7 @@ def sandbox(
         data={
             "js": js,
             "libraries": libraries or ["echarts"],
-            "context": context or {},
+            **runtime,
         },
         height=height,
         key=key,
