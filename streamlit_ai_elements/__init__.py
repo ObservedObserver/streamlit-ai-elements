@@ -31,6 +31,24 @@ __all__ = [
     "vega_lite",
     "sandbox",
     "excalidraw",
+    "chat",
+    "AssistantChunk",
+    "ChatBackendConfig",
+    "ChatMessage",
+    "StreamingSessionState",
+    "ToolCallCard",
+    "append_user_message",
+    "chat_container",
+    "chat_message",
+    "chat_reasoning",
+    "chat_stream",
+    "chat_tool_card",
+    "create_chat_session",
+    "register_tool_card_renderer",
+    "render_chat_message",
+    "render_chat_session",
+    "stream_assistant_turn",
+    "stream_chat_turn",
 ]
 
 # ---------------------------------------------------------------------------
@@ -594,3 +612,25 @@ def excalidraw(
         height=height,
         key=key,
     )
+
+
+from . import chat
+from .chat import (
+    AssistantChunk,
+    ChatBackendConfig,
+    ChatMessage,
+    StreamingSessionState,
+    ToolCallCard,
+    append_user_message,
+    chat_container,
+    chat_message,
+    chat_reasoning,
+    chat_stream,
+    chat_tool_card,
+    create_session_state as create_chat_session,
+    register_tool_card_renderer,
+    render_chat_message,
+    render_chat_session,
+    stream_assistant_turn,
+    stream_chat_turn,
+)

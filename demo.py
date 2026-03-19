@@ -1,27 +1,26 @@
 """
 AI Chat with Visual Elements
-Run:  streamlit run demo.py
+Run: streamlit run demo.py
 """
 
+from __future__ import annotations
+
 import os
+
 import pandas as pd
-from openai import OpenAI
 import streamlit as st
+from openai import OpenAI
 
 import streamlit_ai_elements as ai
-from streamlit_ai_elements.chat_support import (
-    build_api_messages,
-    call_llm,
-    render_element,
-)
 
 try:
     from dotenv import load_dotenv
+
     load_dotenv()
 except ImportError:
     pass
 
-# ── Page config ───────────────────────────────────────────────────────────────
+
 st.set_page_config(page_title="AI Elements Chat", layout="centered")
 
 
@@ -43,19 +42,25 @@ def build_demo_resources(uploaded_file) -> tuple[dict[str, ai.RuntimeResource], 
         dataframe,
     )
 
-# ── Sidebar ───────────────────────────────────────────────────────────────────
+
 with st.sidebar:
     st.title("AI Elements")
     model = st.selectbox("Model", ["gpt-5.4", "gpt-4o", "gpt-4o-mini", "o4-mini"], index=0)
+    backend = st.selectbox(
+        "Backend",
+        ["responses", "chat_completions"],
+        index=0,
+        help="Responses API is the canonical streaming path. Chat Completions is adapted into the same event model.",
+    )
     if st.button("Clear chat"):
-        st.session_state.messages = []
+        st.session_state.chat_session = ai.create_chat_session()
         st.rerun()
     st.divider()
     st.markdown(
         "**Rendering modes**\n\n"
-        "- **JS Raw** — animated SVGs, custom HTML\n"
-        "- **Sandbox** — interactive dashboards (ECharts)\n"
-        "- **Pre-Built Component** — Vega-Lite, Excalidraw, and other structured renderers\n"
+        "- **JS Raw**: animated SVGs, custom HTML\n"
+        "- **Sandbox**: interactive dashboards with ECharts\n"
+        "- **Pre-Built Component**: Vega-Lite and Excalidraw\n"
     )
     st.divider()
     uploaded_csv = st.file_uploader("Upload CSV Data", type=["csv"])
@@ -71,7 +76,7 @@ with st.sidebar:
     else:
         st.caption("Upload a CSV to make tabular data available during chat.")
 
-# ── OpenAI client ─────────────────────────────────────────────────────────────
+
 api_key = os.environ.get("OPENAI_API_KEY", "")
 base_url = os.environ.get("OPENAI_API_BASE_URL") or os.environ.get("OPENAI_BASE_URL") or None
 
@@ -81,54 +86,32 @@ if not api_key:
 
 client = OpenAI(api_key=api_key, base_url=base_url)
 
-# ── Session state ─────────────────────────────────────────────────────────────
-if "messages" not in st.session_state:
-    st.session_state.messages = []  # display format: {role, content, elements?}
+if "chat_session" not in st.session_state:
+    st.session_state.chat_session = ai.create_chat_session()
 
 
-# ── Render chat history ───────────────────────────────────────────────────────
-for i, msg in enumerate(st.session_state.messages):
-    with st.chat_message(msg["role"]):
-        # Render elements first, then text
-        for j, elem in enumerate(msg.get("elements", [])):
-            render_element(elem, key=f"el_{i}_{j}", resources=resources)
-        if msg.get("content"):
-            st.markdown(msg["content"])
+ai.render_chat_session(st.session_state.chat_session, resources=resources)
 
-# ── Chat input ────────────────────────────────────────────────────────────────
+
 if prompt := st.chat_input("Ask me to create something visual…"):
-    # Show & store user message
-    st.session_state.messages.append({"role": "user", "content": prompt})
+    st.session_state.chat_session = ai.append_user_message(st.session_state.chat_session, prompt)
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Get AI response
-    with st.chat_message("assistant"):
-        with st.spinner("Thinking…"):
-            try:
-                result = call_llm(
-                    client,
-                    model,
-                    build_api_messages(st.session_state.messages, resources=resources),
-                )
-            except Exception as e:
-                st.error(f"API error: {e}")
-                st.stop()
-
-        # Render elements
-        msg_idx = len(st.session_state.messages)
-        for j, elem in enumerate(result["elements"]):
-            render_element(elem, key=f"el_{msg_idx}_{j}", resources=resources)
-
-        # Display text
-        if result["content"]:
-            st.markdown(result["content"])
-
-    # Store assistant message
-    st.session_state.messages.append(
-        {
-            "role": "assistant",
-            "content": result["content"],
-            "elements": result["elements"],
-        }
+    config = ai.ChatBackendConfig(
+        model=model,
+        backend=backend,
+        reasoning_effort="medium",
+        reasoning_summary="auto",
+    )
+    ai.chat_stream(
+        ai.stream_assistant_turn(
+            client,
+            state=st.session_state.chat_session,
+            config=config,
+            resources=resources,
+        ),
+        state=st.session_state.chat_session,
+        resources=resources,
+        key_prefix="demo_stream",
     )
