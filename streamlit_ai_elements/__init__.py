@@ -182,7 +182,8 @@ _VL_CDN_JS = (
     + r"""
 function _whenReady(el) {
   return new Promise((resolve) => {
-    if (el.clientWidth > 0) return resolve();
+    const rect = el.getBoundingClientRect();
+    if (rect.width > 0 || el.clientWidth > 0) return resolve();
     const ro = new ResizeObserver((entries) => {
       if (entries[0].contentRect.width > 0) { ro.disconnect(); resolve(); }
     });
@@ -190,11 +191,35 @@ function _whenReady(el) {
   });
 }
 
+function _measureElement(el) {
+  const rect = el.getBoundingClientRect();
+  return {
+    width: Math.round(rect.width || el.clientWidth),
+    height: Math.round(rect.height || el.clientHeight),
+  };
+}
+
 function _resolveContainerSize(spec, el) {
   const resolved = Object.assign({}, spec);
-  const w = el.clientWidth;
+  const { width: w, height: h } = _measureElement(el);
   if (resolved.width === 'container' && w > 0) resolved.width = w - 2;
+  if (resolved.height === 'container' && h > 0) resolved.height = h;
   return resolved;
+}
+
+function _normalizeContainerHeight(height) {
+  if (typeof height === 'number') return height + 'px';
+  if (typeof height !== 'string') return null;
+  const value = height.trim();
+  if (!value || value === 'auto') return null;
+  return /^\d+$/.test(value) ? value + 'px' : value;
+}
+
+function _applyContainerHeight(el, height) {
+  const normalized = _normalizeContainerHeight(height);
+  if (!normalized) return;
+  el.style.height = normalized;
+  el.style.minHeight = normalized;
 }
 
 export default function (component) {
@@ -217,22 +242,35 @@ export default function (component) {
       await _loadScript('https://cdn.jsdelivr.net/npm/vega-embed@6/build/vega-embed.min.js');
 
       root.innerHTML = '';
+      _applyContainerHeight(root, data.containerHeight);
       await _whenReady(root);
       const spec = typeof data.spec === 'string' ? JSON.parse(data.spec) : data.spec;
       const resolved = _resolveContainerSize(spec, root);
       const result = await window.vegaEmbed(root, resolved, {
         actions: false,
-        renderer: 'canvas',
+        renderer: 'svg',
         ...(data.opts || {}),
       });
+      const responsiveWidth = spec.width === 'container';
+      const responsiveHeight = spec.height === 'container';
+      const syncViewSize = () => {
+        const { width: w, height: h } = _measureElement(root);
+        if (responsiveWidth && w > 0) result.view.width(w - 2);
+        if (responsiveHeight && h > 0) result.view.height(h);
+        if ((responsiveWidth && w > 0) || (responsiveHeight && h > 0)) {
+          result.view.resize().runAsync();
+        }
+      };
       let t;
       new ResizeObserver(() => {
         clearTimeout(t);
         t = setTimeout(() => {
-          const w = root.clientWidth;
-          if (w > 0) result.view.width(w - 2).resize().runAsync();
+          syncViewSize();
         }, 100);
       }).observe(root);
+      syncViewSize();
+      requestAnimationFrame(syncViewSize);
+      setTimeout(syncViewSize, 120);
     } catch (e) {
       root.innerHTML =
         '<pre style="color:#ff6b6b;padding:12px;white-space:pre-wrap">' + e.message + '</pre>';
@@ -254,15 +292,28 @@ def vega_lite(
     """
     Render a Vega-Lite chart from a specification dict (or JSON string).
     """
-    renderer = _ensure(
-        "ai_vega_lite",
-        html='<div id="_r" style="width:100%"></div>',
-        js=_VL_JS,
-    )
     if isinstance(spec, str):
         spec = _json.loads(spec)
+
+    # Prefer Streamlit's built-in Vega-Lite renderer for standard specs.
+    # It is more reliable inside dynamic containers such as chat messages.
+    if not options:
+        return st.vega_lite_chart(
+            spec=spec,
+            height=height,
+            use_container_width=True,
+            theme=None,
+            key=key,
+        )
+
+    renderer = _ensure(
+        "ai_vega_lite",
+        html='<div id="_r" style="display:block;width:100%;height:100%;min-height:100%"></div>',
+        js=_VL_JS,
+        isolate_styles=False,
+    )
     return renderer(
-        data={"spec": spec, "opts": options or {}},
+        data={"spec": spec, "opts": options, "containerHeight": height},
         height=height,
         key=key,
     )

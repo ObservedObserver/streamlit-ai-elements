@@ -13,6 +13,20 @@ const shared = {
   sourcemap: false,
 };
 
+function resolveEntryPoint(dir) {
+  const tsEntry = path.join(packagesDir, dir, "src/index.ts");
+  if (fs.existsSync(tsEntry)) {
+    return tsEntry;
+  }
+
+  const jsEntry = path.join(packagesDir, dir, "src/index.js");
+  if (fs.existsSync(jsEntry)) {
+    return jsEntry;
+  }
+
+  return null;
+}
+
 async function build() {
   const dirs = fs.readdirSync(packagesDir).filter((d) => {
     return fs.statSync(path.join(packagesDir, d)).isDirectory();
@@ -27,9 +41,9 @@ async function build() {
     // Skip packages marked with buildConfig.skip (e.g. shared utils)
     if (pkg.buildConfig?.skip) continue;
 
-    const entryPoint = path.join(packagesDir, dir, "src/index.js");
-    if (!fs.existsSync(entryPoint)) {
-      console.warn(`  skip ${dir} (no src/index.js)`);
+    const entryPoint = resolveEntryPoint(dir);
+    if (!entryPoint) {
+      console.warn(`  skip ${dir} (no src/index.ts or src/index.js)`);
       continue;
     }
 

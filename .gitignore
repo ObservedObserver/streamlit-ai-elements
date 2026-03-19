@@ -198,3 +198,9 @@ lerna-debug.log*
 
 # Frontend build artifacts
 frontend/node_modules/
+
+# Playwright / browser automation artifacts
+.playwright-cli/
+output/playwright/
+playwright-report/
+test-results/

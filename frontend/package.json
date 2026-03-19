@@ -6,9 +6,11 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "node build.js"
+    "build": "node build.js",
+    "typecheck": "tsc --project tsconfig.json"
   },
   "devDependencies": {
-    "esbuild": "^0.24.0"
+    "esbuild": "^0.24.0",
+    "typescript": "^5.8.2"
   }
 }
