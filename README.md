@@ -10,6 +10,12 @@ It provides:
 - a lightweight Chat Kit for streaming assistant output, reasoning blocks, and tool-call cards
 - runtime resources that can be exposed to both the model and the frontend
 
+
+
+https://github.com/user-attachments/assets/ff4424a9-59d6-4a8f-8116-6732060d3e26
+
+
+
 ## Installation
 
 ```bash
