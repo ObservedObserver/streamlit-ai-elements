@@ -31,7 +31,8 @@ def chat_message(role: str, *, name: str | None = None):
 def chat_reasoning(content: str, *, expanded: bool = False, label: str = "Thinking") -> None:
     if not content:
         return
-    with st.expander(label, expanded=expanded):
+    title = f"{label}..." if expanded else label
+    with st.expander(title, expanded=expanded):
         st.markdown(content)
 
 
@@ -121,7 +122,8 @@ def _render_generic_tool_card(
     resources: dict[str, Any] | None,
 ) -> None:
     del resources  # not used
-    label = f"Tool: `{card.tool_name}` · {card.status}"
+    del key
+    label = _tool_card_label("Tool", card.tool_name, card.status)
     with st.expander(label, expanded=card.status != "completed"):
         if card.argument_preview:
             st.caption("Arguments")
@@ -136,7 +138,7 @@ def _render_renderer_tool_card(
     key: str,
     resources: dict[str, Any] | None,
 ) -> None:
-    label = f"Renderer: `{card.tool_name}` · {card.status}"
+    label = _tool_card_label("Renderer", card.tool_name, card.status)
     with st.container():
         st.caption(label)
         if card.element is not None:
@@ -160,6 +162,14 @@ def _format_json_preview(raw_arguments: str) -> str:
         return json.dumps(json.loads(raw_arguments), ensure_ascii=True, indent=2)
     except json.JSONDecodeError:
         return raw_arguments
+
+
+def _tool_card_label(kind: str, tool_name: str, status: str) -> str:
+    if status in {"streaming", "rendering"}:
+        return f"{kind}: `{tool_name}`..."
+    if status == "error":
+        return f"{kind}: `{tool_name}` error"
+    return f"{kind}: `{tool_name}`"
 
 
 for _renderer_tool in ("js_raw", "sandbox", "prebuilt_component", "vega_lite", "excalidraw"):
